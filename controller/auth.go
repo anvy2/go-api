@@ -2,8 +2,11 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"testapi/db"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -14,22 +17,44 @@ import (
 )
 
 var (
-	client     *mongo.Client     = db.Client
-	collection *mongo.Collection = client.Database("testapi").Collection("user_table")
-	cache      *redis.Client     = db.RDB
-	ctx        context.Context   = context.Background()
+	client *mongo.Client   = db.GetClient()
+	cache  *redis.Client   = db.InitRedis()
+	ctx    context.Context = context.Background()
 )
+
+type person struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func serialize(s []byte) person {
+	var p person
+	err := json.Unmarshal(s, &p)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
 
 //SignUp ...
 func SignUp(c *gin.Context) {
-	username := c.Query("username")
+	collection := client.Database("testapi").Collection("user_table")
+
+	buf := make([]byte, 1024)
+	num, _ := c.Request.Body.Read(buf)
+	reqBody := buf[0:num]
+	u := serialize(reqBody)
+	fmt.Println(u)
+	username := u.Username
+	password := u.Password
+
 	user := db.User{
 		ID:       primitive.NewObjectID(),
 		Username: username,
-		Password: c.Query("password"),
+		Password: password,
 	}
 	var e db.User
-	err := collection.FindOne(context.TODO(), bson.D{}).Decode(&e)
+	err := collection.FindOne(context.TODO(), bson.D{{}}).Decode(&e)
 	if err == mongo.ErrNoDocuments {
 		_, err := collection.InsertOne(context.TODO(), user)
 		if err != nil {
@@ -39,36 +64,45 @@ func SignUp(c *gin.Context) {
 		c.JSON(http.StatusCreated, gin.H{"message": "user created"})
 		return
 	}
-	c.JSON(http.StatusAlreadyReported, gin.H{"message": "User already exists!"})
+	c.JSON(http.StatusAlreadyReported, gin.H{"message": "User already exists!", "username": username, "password": password})
 	return
 }
 
 //SignIn ...
 func SignIn(c *gin.Context) {
-	username := c.Query("username")
-	password := c.Query("password")
+	collection := client.Database("testapi").Collection("user_table")
 
+	buf := make([]byte, 1024)
+	num, _ := c.Request.Body.Read(buf)
+	reqBody := buf[0:num]
+	u := serialize(reqBody)
+	// fmt.Println(u)
+	username := u.Username
+	password := u.Password
 	var user db.User
-	filter := bson.D{
-		primitive.E{Key: "username", Value: username},
+	filter := bson.M{
+		"username": username,
 	}
 	err := collection.FindOne(context.TODO(), filter).Decode(&user)
-	if err != mongo.ErrNoDocuments {
-		c.JSON(http.StatusOK, gin.H{"message": "Database error"})
+	if err == mongo.ErrNoDocuments {
+		c.JSON(http.StatusOK, gin.H{"message": "No user found", "filter": filter, "user": user, "username": username})
+		return
 	}
+
 	if user.Password != password {
+		fmt.Println(filter)
 		c.JSON(http.StatusOK, gin.H{"message": "Invalid Credetials"})
 		return
 	}
 
 	sessionToken := uuid.New().String()
-	err = cache.SetEX(ctx, sessionToken, username, 60*60).Err()
+	err = cache.SetEX(ctx, sessionToken, username, 60*time.Second).Err()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "Try again. Cannot set cookie"})
 		return
 	}
 
-	c.SetCookie("session_token", sessionToken, 60*60, "/", "localhost:8000", false, false)
+	c.SetCookie("session_token", sessionToken, 60, "/login", "localhost", false, false)
 	c.JSON(http.StatusOK, gin.H{"message": "Login Successful", "user": username})
 	return
 
@@ -76,6 +110,6 @@ func SignIn(c *gin.Context) {
 
 //SignOut ...
 func SignOut(c *gin.Context) {
-	c.SetCookie("sessionToken", "", 0, "/", "localhost:8000", false, false)
+	c.SetCookie("sessionToken", "", 0, "/login", "localhost", false, false)
 	return
 }

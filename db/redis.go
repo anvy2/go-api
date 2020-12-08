@@ -1,18 +1,27 @@
 package db
 
 import (
+	"sync"
+
 	"github.com/go-redis/redis/v8"
 )
 
 //RDB ...
-var RDB *redis.Client
+var (
+	rdbClient *redis.Client
+	redisOnce sync.Once
+)
 
 //InitRedis ...
-func InitRedis() {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
+func InitRedis() *redis.Client {
+
+	redisOnce.Do(func() {
+		rdb := redis.NewClient(&redis.Options{
+			Addr:     "localhost:6379",
+			Password: "",
+			DB:       0,
+		})
+		rdbClient = rdb
 	})
-	RDB = rdb
+	return rdbClient
 }

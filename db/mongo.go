@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"time"
+	"sync"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -10,24 +10,29 @@ import (
 
 var (
 	//Client ...
-	Client *mongo.Client
-
-	//Ctx ...
-	Ctx context.Context
-	err error
+	clientInstance *mongo.Client
+	err            error
+	mongoOnce      sync.Once
 )
 
-//Connect ...
-func Connect(URI string) {
-	Client, err = mongo.NewClient(options.Client().ApplyURI(URI))
+const (
+	uri = "mongodb://root:password@localhost:27017/"
+)
 
-	if err != nil {
-		panic("Failed to make new client!")
-	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	err = Client.Connect(ctx)
+//GetConnect ...
+func GetClient() *mongo.Client {
+	mongoOnce.Do(func() {
+		clientOptions := options.Client().ApplyURI(uri)
+		client, err := mongo.Connect(context.TODO(), clientOptions)
+		if err != nil {
+			panic(err)
+		}
+		err = client.Ping(context.TODO(), nil)
 
-	if err != nil {
-		panic("Cannot connect to db!")
-	}
+		if err != nil {
+			panic("Ping error")
+		}
+		clientInstance = client
+	})
+	return clientInstance
 }

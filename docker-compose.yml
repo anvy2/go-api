@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   mongodb_container:
-    image: mongo:latest
+    image: mongo
     container_name: mongodb
     environment:
       MONGO_INITDB_DATABASE: testapi
@@ -12,3 +12,7 @@ services:
       - 27017:27017
     volumes:
       - /home/anvy/Others/DB/mongodb/go-testapi/mongodb_data_container:/data/db
+  redis:
+    image: redis
+    ports:
+      - 6379:6379

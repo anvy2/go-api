@@ -8,19 +8,26 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var (
+	//Client ...
+	Client *mongo.Client
+
+	//Ctx ...
+	Ctx context.Context
+	err error
+)
+
 //Connect ...
-func Connect(URI string) (*mongo.Client, context.Context, context.CancelFunc) {
-	client, err := mongo.NewClient(options.Client().ApplyURI(URI))
+func Connect(URI string) {
+	Client, err = mongo.NewClient(options.Client().ApplyURI(URI))
 
 	if err != nil {
 		panic("Failed to make new client!")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	err = client.Connect(ctx)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = Client.Connect(ctx)
 
 	if err != nil {
 		panic("Cannot connect to db!")
 	}
-	return client, ctx, cancel
-
 }

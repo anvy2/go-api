@@ -8,7 +8,10 @@ import (
 )
 
 func main() {
-	client, ctx, _ := db.Connect("localhost:27017")
+	db.Connect("mongodb://root:password@localhost:27017")
+	db.InitRedis()
+	client := db.Client
+	ctx := db.Ctx
 	defer client.Disconnect(ctx)
 	router := gin.Default()
 	models.Auth(router)
